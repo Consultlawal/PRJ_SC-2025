@@ -120,8 +120,6 @@ kind: Deployment
 metadata:
   name: cluster-autoscaler
   namespace: kube-system
-  labels:
-    app: cluster-autoscaler
 spec:
   replicas: 1
   selector:
@@ -132,37 +130,25 @@ spec:
       labels:
         app: cluster-autoscaler
       annotations:
-        prometheus.io/scrape: 'true'
-        prometheus.io/port: '8085'
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8085"
     spec:
       serviceAccountName: cluster-autoscaler
       containers:
-        - image: k8s.gcr.io/cluster-autoscaler:v1.14.7
-          name: cluster-autoscaler
-          resources:
-            limits:
-              cpu: 100m
-              memory: 300Mi
-            requests:
-              cpu: 100m
-              memory: 300Mi
+        - name: cluster-autoscaler
+          image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.29.0
           command:
             - ./cluster-autoscaler
-            - --v=4
-            - --stderrthreshold=info
             - --cloud-provider=aws
-            - --skip-nodes-with-local-storage=false
-            - --expander=least-waste
-            - --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/terraform-eks-demo
-          env:
-          - name: AWS_REGION
-            value: us-west-1
-          volumeMounts:
-          - name: ssl-certs
-            mountPath: /etc/ssl/certs/ca-certificates.crt
-            readOnly: true
-          imagePullPolicy: "Always"
-      volumes:
-        - name: ssl-certs
-          hostPath:
-            path: "/etc/ssl/certs/ca-bundle.crt"
+            - --cluster-name=terraform-eks-demo
+            - --balance-similar-node-groups
+            - --skip-nodes-with-system-pods=false
+            - --node-group-auto-discovery=asg:tag=eks.amazonaws.com/nodegroup
+          resources:
+            requests:
+              cpu: 200m
+              memory: 500Mi
+            limits:
+              cpu: 200m
+              memory: 500Mi
+

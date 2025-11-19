@@ -3,8 +3,10 @@
 #
 
 provider "aws" {
-  region  = "us-west-1"
+  region = var.region
+  profile = "Clawal-profile"
 }
+
 
 # Using these data sources allows the configuration to be
 # generic for any region.
@@ -17,3 +19,13 @@ data "aws_availability_zones" "available" {}
 # to open EC2 Security Group access to the Kubernetes cluster.
 # See workstation-external-ip.tf for additional information.
 provider "http" {}
+
+terraform {
+  required_version = ">= 1.2.0"
+  required_providers {
+    aws = {
+      version = "~> 5.0"
+    }
+  }
+}
+

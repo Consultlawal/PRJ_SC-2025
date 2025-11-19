@@ -1,0 +1,12 @@
+# You should secure the Grafana password in a Kubernetes secret or 
+# use an ingress + auth. This example uses a quick-start approach 
+# — change for production.
+
+# monitoring-values.yaml (basic example)
+grafana:
+  adminPassword: "ChangeMeNow123!"
+  service:
+    type: LoadBalancer
+prometheus:
+  prometheusSpec:
+    retention: "7d"

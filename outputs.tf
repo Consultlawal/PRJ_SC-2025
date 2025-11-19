@@ -4,8 +4,6 @@
 
 locals {
   config_map_aws_auth = <<CONFIGMAPAWSAUTH
-
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -21,8 +19,6 @@ data:
 CONFIGMAPAWSAUTH
 
   kubeconfig = <<KUBECONFIG
-
-
 apiVersion: v1
 clusters:
 - cluster:
@@ -41,11 +37,12 @@ users:
 - name: aws
   user:
     exec:
-      apiVersion: client.authentication.k8s.io/v1alpha1
-      command: aws-iam-authenticator
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: aws
       args:
-        - "token"
-        - "-i"
+        - "eks"
+        - "get-token"
+        - "--cluster-name"
         - "${var.cluster-name}"
 KUBECONFIG
 }
@@ -56,4 +53,8 @@ output "config_map_aws_auth" {
 
 output "kubeconfig" {
   value = local.kubeconfig
+}
+
+output "subnet_public" {
+  value = aws_subnet.demo[0].map_public_ip_on_launch
 }

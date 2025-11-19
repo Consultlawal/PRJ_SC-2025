@@ -1,0 +1,49 @@
+name: Container Security Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install Trivy
+      run: |
+        sudo apt-get update
+        sudo apt-get install wget -y
+        wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.51.0_Linux-64bit.deb
+        sudo dpkg -i trivy_0.51.0_Linux-64bit.deb
+
+    - name: Install Kubesec
+      run: |
+        curl -LO https://github.com/controlplaneio/kubesec/releases/latest/download/kubesec_linux_amd64.tar.gz
+        tar -xf kubesec_linux_amd64.tar.gz
+        sudo mv kubesec /usr/local/bin/
+
+    - name: Install kube-bench
+      run: |
+        curl -L https://github.com/aquasecurity/kube-bench/releases/latest/download/kube-bench_ubuntu_20.04_amd64.tar.gz -o kb.tar.gz
+        mkdir kb && tar -xf kb.tar.gz -C kb
+        sudo mv kb/kube-bench /usr/local/bin/
+
+    - name: Install Pandoc (for PDF)
+      run: sudo apt-get install pandoc -y
+
+    - name: Install wkhtmltopdf (PDF generator)
+      run: sudo apt-get install wkhtmltopdf -y
+
+    - name: Run security scanning script
+      run: |
+        bash tools/generate-security-report.sh
+
+    - name: Upload PDF report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-report
+        path: reports/security-report.pdf

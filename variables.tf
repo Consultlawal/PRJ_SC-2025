@@ -10,5 +10,8 @@ variable "key_pair_name" {
   default = "ekskey"
 }
 variable "eks_node_instance_type" {
-  default = "t2.medium"
+  default = "t3.medium"
+}
+variable "region" {
+  default = "us-east-1"
 }
