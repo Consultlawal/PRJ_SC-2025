@@ -11,7 +11,7 @@
 variable "github_repo" {
   description = "GitHub repo in the form owner/repo (e.g. my-org/my-repo)"
   type        = string
-  default     = "your-org/your-repo"
+  default     = "https://github.com/Consultlawal/PRJ_SC-2025"
 }
 
 variable "allowed_ref" {

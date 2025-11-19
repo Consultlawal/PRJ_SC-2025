@@ -10,13 +10,28 @@ jobs:
   deploy-and-secure:
     runs-on: ubuntu-latest
 
-    env:
-      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     # ------------------- Checkout Repo -------------------
     - name: Checkout repository
       uses: actions/checkout@v3
+
+    # ------------------- Configure AWS Credentials -------------------
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
+        aws-region: us-east-1
+
+    # ------------------- Generate kubeconfig from AWS -------------------
+    - name: Generate kubeconfig
+      run: |
+        aws eks update-kubeconfig \
+          --name terraform-eks-demo \
+          --region us-east-1
 
     # ------------------- Trivy SAST Scan -------------------
     - name: Trivy SAST Scan
@@ -27,17 +42,11 @@ jobs:
         format: 'table'
         severity: 'HIGH,CRITICAL'
 
-    # ------------------- Setup Kubernetes CLI -------------------
+    # ------------------- Setup kubectl -------------------
     - name: Setup kubectl
       uses: azure/setup-kubectl@v3
       with:
         version: 'v1.27.3'
-
-    - name: Decode kubeconfig
-      run: |
-        mkdir -p $HOME/.kube
-        echo "$KUBE_CONFIG_DATA" | base64 --decode > $HOME/.kube/config
-        chmod 600 $HOME/.kube/config
 
     # ------------------- Deploy Hipster Shop -------------------
     - name: Deploy Hipster Shop
@@ -70,7 +79,7 @@ jobs:
         kubectl create namespace trivy-system || true
         helm install trivy-operator aqua/trivy-operator -n trivy-system
 
-    # ------------------- Run Vulnerability Scan -------------------
+    # ------------------- Run cluster vulnerability scan -------------------
     - name: Scan deployed pods with Trivy
       run: |
         echo "Running cluster vulnerability scan..."
