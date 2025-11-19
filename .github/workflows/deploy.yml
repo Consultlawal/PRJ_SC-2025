@@ -1,18 +1,19 @@
-name: Deploy Hipster Shop with Security
+name: Provision EKS & Deploy Hipster Shop with Security
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
-  deploy-and-secure:
+  provision-and-deploy:
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
+    env:
+      AWS_REGION: us-east-1
+      CLUSTER_NAME: terraform-eks-demo
+      TF_VAR_github_repo: your-org/your-repo   # Replace with your repo
+      TF_VAR_allowed_ref: refs/heads/main
 
     steps:
     # ------------------- Checkout Repo -------------------
@@ -23,15 +24,26 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
-        aws-region: us-east-1
+        role-to-assume: ${{ secrets.GH_ACTIONS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
 
-    # ------------------- Generate kubeconfig from AWS -------------------
-    - name: Generate kubeconfig
+    # ------------------- Install Terraform -------------------
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.6.0
+
+    # ------------------- Terraform Init & Apply -------------------
+    - name: Terraform Init
+      run: terraform -chdir=terraform init
+
+    - name: Terraform Apply (Provision EKS)
+      run: terraform -chdir=terraform apply -auto-approve
+
+    # ------------------- Configure kubeconfig -------------------
+    - name: Update kubeconfig
       run: |
-        aws eks update-kubeconfig \
-          --name terraform-eks-demo \
-          --region us-east-1
+        aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
 
     # ------------------- Trivy SAST Scan -------------------
     - name: Trivy SAST Scan
@@ -59,17 +71,15 @@ jobs:
         kubectl create namespace kyverno || true
         kubectl apply -f https://raw.githubusercontent.com/kyverno/kyverno/main/config/release/install.yaml
 
+    - name: Apply Kyverno policies
+      run: |
+        kubectl apply -f kyverno-policies/
+
     # ------------------- Install OPA Gatekeeper -------------------
     - name: Install OPA Gatekeeper
       run: |
         kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/master/deploy/gatekeeper.yaml
         kubectl -n gatekeeper-system rollout status deployment/gatekeeper-controller-manager
-
-    # ------------------- Apply Kyverno Policies -------------------
-    - name: Apply Kyverno policies
-      run: |
-        echo "Applying Kyverno policies..."
-        kubectl apply -f kyverno-policies/
 
     # ------------------- Install Trivy Operator -------------------
     - name: Install Trivy Operator
@@ -79,8 +89,95 @@ jobs:
         kubectl create namespace trivy-system || true
         helm install trivy-operator aqua/trivy-operator -n trivy-system
 
-    # ------------------- Run cluster vulnerability scan -------------------
-    - name: Scan deployed pods with Trivy
-      run: |
-        echo "Running cluster vulnerability scan..."
-        kubectl get vulnerabilities -A || true
+    # ------------------- Scan deployed pods -------------------
+    - name: Run cluster vulnerability scan
+      run: kubectl get vulnerabilities -A || true
+
+      
+
+# name: Deploy Hipster Shop with Security
+
+# on:
+#   push:
+#     branches:
+#       - main
+#   workflow_dispatch:
+
+# jobs:
+#   deploy-and-secure:
+#     runs-on: ubuntu-latest
+
+#     permissions:
+#       id-token: write
+#       contents: read
+
+#     steps:
+#     # ------------------- Checkout Repo -------------------
+#     - name: Checkout repository
+#       uses: actions/checkout@v3
+
+#     # ------------------- Configure AWS Credentials -------------------
+#     - name: Configure AWS credentials
+#       uses: aws-actions/configure-aws-credentials@v2
+#       with:
+#         role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
+#         aws-region: us-east-1
+
+#     # ------------------- Generate kubeconfig from AWS -------------------
+#     - name: Generate kubeconfig
+#       run: |
+#         aws eks update-kubeconfig \
+#           --name terraform-eks-demo \
+#           --region us-east-1
+
+#     # ------------------- Trivy SAST Scan -------------------
+#     - name: Trivy SAST Scan
+#       uses: aquasecurity/trivy-action@master
+#       with:
+#         scan-type: 'fs'
+#         scan-ref: '.'
+#         format: 'table'
+#         severity: 'HIGH,CRITICAL'
+
+#     # ------------------- Setup kubectl -------------------
+#     - name: Setup kubectl
+#       uses: azure/setup-kubectl@v3
+#       with:
+#         version: 'v1.27.3'
+
+#     # ------------------- Deploy Hipster Shop -------------------
+#     - name: Deploy Hipster Shop
+#       run: |
+#         kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml
+
+#     # ------------------- Install Kyverno -------------------
+#     - name: Install Kyverno
+#       run: |
+#         kubectl create namespace kyverno || true
+#         kubectl apply -f https://raw.githubusercontent.com/kyverno/kyverno/main/config/release/install.yaml
+
+#     # ------------------- Install OPA Gatekeeper -------------------
+#     - name: Install OPA Gatekeeper
+#       run: |
+#         kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/master/deploy/gatekeeper.yaml
+#         kubectl -n gatekeeper-system rollout status deployment/gatekeeper-controller-manager
+
+#     # ------------------- Apply Kyverno Policies -------------------
+#     - name: Apply Kyverno policies
+#       run: |
+#         echo "Applying Kyverno policies..."
+#         kubectl apply -f kyverno-policies/
+
+#     # ------------------- Install Trivy Operator -------------------
+#     - name: Install Trivy Operator
+#       run: |
+#         helm repo add aqua https://aquasecurity.github.io/helm-charts/
+#         helm repo update
+#         kubectl create namespace trivy-system || true
+#         helm install trivy-operator aqua/trivy-operator -n trivy-system
+
+#     # ------------------- Run cluster vulnerability scan -------------------
+#     - name: Scan deployed pods with Trivy
+#       run: |
+#         echo "Running cluster vulnerability scan..."
+#         kubectl get vulnerabilities -A || true
