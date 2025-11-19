@@ -50,7 +50,8 @@ data "aws_iam_policy_document" "github_assume_role" {
       # "repo:<owner>/<repo>:ref:refs/heads/<branch>"
       variable = "token.actions.githubusercontent.com:sub"
       values   = [
-        "repo:${var.github_repo}:ref:${var.allowed_ref}"
+        "repo:Consultlawal/PRJ_SC-2025:ref:refs/heads/main"
+        # "repo:${var.github_repo}:ref:${var.allowed_ref}"
       ]
     }
 
