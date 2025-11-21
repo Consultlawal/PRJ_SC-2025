@@ -15,3 +15,8 @@ variable "eks_node_instance_type" {
 variable "region" {
   default = "us-east-1"
 }
+variable "cluster_name" {
+  description = "The name of the EKS cluster"
+  type        = string
+  default     = "terraform-eks-demo" # Matches the CLUSTER_NAME in your YAML
+}

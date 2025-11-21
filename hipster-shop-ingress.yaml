@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hipster-shop-ingress
+  namespace: hipster-shop
+  annotations:
+    # 1. AWS ALB Controller Annotation
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    # 2. ExternalDNS Annotation
+    external-dns.alpha.kubernetes.io/hostname: frontend.ailawal.ca # <--- YOUR DESIRED HOSTNAME
+spec:
+  rules:
+  - host: frontend.ailawal.ca # <--- YOUR DESIRED HOSTNAME
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend # This is the service name in the Hipster Shop manifest
+            port:
+              number: 80

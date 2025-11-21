@@ -1,0 +1,249 @@
+name: Deploy Security Mesh & Hipster Shop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: prj-sc-2025-eks # Use a descriptive cluster name
+  REPORTS_DIR: security-reports # Directory for storing all reports
+
+jobs:
+  deploy:
+    name: Provision and Deploy
+    runs-on: ubuntu-latest
+    steps:
+      # =======================================================
+      # 1. SETUP & AUTHENTICATION
+      # =======================================================
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GH_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.29.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+
+      - name: Create Reports Directory
+        run: mkdir -p ${{ env.REPORTS_DIR }}
+
+      # =======================================================
+      # 2. PROVISION INFRASTRUCTURE (EKS, VPC, IRSA Roles)
+      # =======================================================
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        id: tf_apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_region: ${{ env.AWS_REGION }}
+          TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
+
+      # =======================================================
+      # 3. FETCH TERRAFORM OUTPUTS (Required for Helm/IRSA setup)
+      # =======================================================
+      - name: Fetch IRSA Role ARNs
+        id: fetch_arns
+        working-directory: ./terraform
+        run: |
+          # The -raw flag is crucial for clean variable assignment
+          ALB_ARN=$(terraform output -raw alb_controller_role_arn)
+          DNS_ARN=$(terraform output -raw external_dns_role_arn)
+          
+          echo "ALB_CONTROLLER_ARN=$ALB_ARN" >> $GITHUB_ENV
+          echo "EXTERNAL_DNS_ARN=$DNS_ARN" >> $GITHUB_ENV
+        
+        # NOTE: This step assumes you have added 'alb_controller_role_arn' and 
+        # 'external_dns_role_arn' outputs to your terraform/outputs.tf file.
+
+      # =======================================================
+      # 4. PREPARE KUBERNETES CONTEXT
+      # =======================================================
+      - name: Update Kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      # =======================================================
+      # 5. SETUP NETWORKING & ACCESS (ALB and ExternalDNS)
+      # =======================================================
+      - name: Install AWS Load Balancer Controller
+        run: |
+          helm repo add aws-load-balancer-controller https://aws.github.io/eks-charts
+          helm repo update
+
+          helm upgrade --install aws-load-balancer-controller aws-load-balancer-controller/aws-load-balancer-controller \
+            --set clusterName=${{ env.CLUSTER_NAME }} \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ env.ALB_CONTROLLER_ARN }}" \
+            --namespace kube-system --wait
+          
+      - name: Install ExternalDNS
+        run: |
+          helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
+          helm repo update
+
+          helm upgrade --install external-dns external-dns/external-dns \
+            --set provider=aws \
+            --set txtOwnerId=${{ env.CLUSTER_NAME }} \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=external-dns \
+            --set policy=sync \
+            --set aws.zoneType=public \
+            --set registry=txt \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ env.EXTERNAL_DNS_ARN }}" \
+            --namespace external-dns --create-namespace --wait
+
+      # =======================================================
+      # 6. DEPLOY SECURITY MESH COMPONENTS (Policy, Runtime, Audit, Monitoring)
+      # =======================================================
+      - name: Install Kyverno (Policy Engine)
+        run: |
+          helm repo add kyverno https://kyverno.github.io/kyverno/
+          helm repo update
+          helm upgrade --install kyverno kyverno/kyverno -n kyverno --create-namespace --wait
+          echo "Kyverno installation complete."
+
+      - name: Apply Kyverno Policies
+        run: |
+          if [ -d "k8s-policies/kyverno" ]; then
+            kubectl apply -f k8s-policies/kyverno/
+            sleep 10
+            echo "Kyverno policies applied from k8s-policies/kyverno/"
+          else
+            echo "::warning:: k8s-policies/kyverno/ directory not found. Skipping Kyverno policy application."
+          fi
+
+      - name: Install Falco (Runtime Security Engine)
+        run: |
+          helm repo add falcosecurity https://falcosecurity.github.io/charts
+          helm repo update
+          helm upgrade --install falco falcosecurity/falco -n falco --create-namespace --wait
+          echo "Falco installation complete."
+
+      - name: Install Trivy Operator (Vulnerability Scanner)
+        run: |
+          helm repo add aqua https://aquasecurity.github.io/helm-charts/
+          helm repo update
+          helm upgrade --install trivy-operator aqua/trivy-operator -n trivy-system --create-namespace --wait
+          echo "Trivy Operator installation complete."
+
+      - name: Install Prometheus and Grafana (Monitoring Stack)
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+            --version 47.6.0 \
+            --namespace monitoring --create-namespace \
+            -f k8s-policies/monitoring/monitoring-values.yaml
+          
+          echo "Prometheus and Grafana installation complete."
+
+      # =======================================================
+      # 7. DEPLOY APPLICATION (Hipster Shop & Route 53 Ingress)
+      # =======================================================
+      # Note: The deployment is done here, and it will be subject to the security policies above.
+      - name: Deploy Hipster Shop and Ingress
+        run: |
+          kubectl create ns hipster-shop || true
+          
+          # Deploy the core application
+          kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml -n hipster-shop
+          
+          # Deploy the Ingress resource for Route 53 (using the new ALB Controller)
+          kubectl apply -f hipster-shop-ingress.yaml -n hipster-shop
+          
+          echo "Hipster Shop and Ingress deployed. Waiting for ALB to provision..."
+          kubectl wait --for=condition=Ready pod -l app=frontend -n hipster-shop --timeout=5m || true
+
+      # =======================================================
+      # 8. RUN SECURITY AUDITS & REPORTING
+      # =======================================================
+      - name: Audit Calico Network Policies
+        run: |
+          echo "[+] Exporting Calico Network Policies..."
+          kubectl get networkpolicies -A -o json > ${{ env.REPORTS_DIR }}/calico-networkpolicies.json
+        
+      - name: Audit Istio Security Configurations
+        run: |
+          echo "[+] Exporting Istio Security Configurations..."
+          # Fetch all Istio CRDs relevant to security
+          kubectl get peerauthentication -A -o json > ${{ env.REPORTS_DIR }}/istio-peerauth.json || true
+          kubectl get authorizationpolicy -A -o json > ${{ env.REPORTS_DIR }}/istio-authz.json || true
+          
+      - name: Run kube-bench (CIS Benchmark)
+        run: |
+          echo "[+] Running kube-bench CIS Benchmark scan inside the cluster..."
+          kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml
+          kubectl wait --for=condition=complete job/kube-bench --timeout=10m
+          KUBE_BENCH_POD=$(kubectl get pods -l app=kube-bench -o jsonpath='{.items[0].metadata.name}')
+          kubectl logs $KUBE_BENCH_POD > ${{ env.REPORTS_DIR }}/kube-bench-report.txt
+          kubectl delete -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml
+          echo "[+] kube-bench report saved."
+        
+      - name: Fetch Falco Alerts
+        run: |
+          echo "[+] Fetching Falco runtime security alerts..."
+          # Tries to get logs from any running Falco pod
+          kubectl logs -l app.kubernetes.io/name=falco -n falco --tail=1000 > ${{ env.REPORTS_DIR }}/falco-alerts.log || true
+          echo "[+] Falco alerts exported."
+
+      - name: Check Trivy Operator Vulnerability Reports
+        run: |
+          echo "[+] Checking Trivy Operator vulnerability reports..."
+          kubectl get vulnerabilityreports -A -o yaml > ${{ env.REPORTS_DIR }}/trivy-operator-vulnerabilityreports.yaml || true
+          kubectl get configauditreports -A -o yaml > ${{ env.REPORTS_DIR }}/trivy-operator-configauditreports.yaml || true
+          echo "[+] Trivy Operator reports exported."
+
+      - name: Check Kyverno Policy Reports
+        run: |
+          echo "[+] Checking Kyverno policy reports..."
+          kubectl get policyreports -A -o yaml > ${{ env.REPORTS_DIR }}/kyverno-policyreports.yaml || true
+          echo "[+] Kyverno policy reports exported."
+
+      # =======================================================
+      # 9. UPLOAD REPORTS AS ARTIFACTS
+      # =======================================================
+      - name: Upload Security Reports Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.sha }}
+          path: ${{ env.REPORTS_DIR }}/
+          retention-days: 7
+          if-no-files-found: ignore
+
+          
+      # 9. (Optional) Terraform Destroy - Only if you want to clean up automatically
+      #    Highly recommended to keep this OFF for main branch in a production setup
+      #    or put it in a separate manual workflow (e.g., destroy-eks.yml)
+      # - name: Terraform Destroy
+      #   if: always() # Run even if previous steps fail
+      #   working-directory: ./terraform
+      #   run: terraform destroy -auto-approve
+      #   env:
+      #     TF_VAR_region: ${{ env.AWS_REGION }}
+      #     TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
