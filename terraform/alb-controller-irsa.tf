@@ -37,6 +37,16 @@ resource "aws_iam_role_policy_attachment" "alb_controller_attach_managed" {
   policy_arn = "arn:aws:iam::aws:policy/AWSLoadBalancerControllerIAMPolicy"
 }
 
+resource "aws_iam_role" "alb_controller" {
+  name               = "${var.cluster_name}-ALBController-Role"
+  assume_role_policy = data.aws_iam_policy_document.assume_role_sa.json
+
+  # CRITICAL: Wait for the EKS Cluster to exist and have its OIDC identity ready
+  depends_on = [
+    aws_eks_cluster.demo
+  ]
+}
+
 # --- OUTPUTS (Crucial for the GitHub Actions Workflow) ---
 output "alb_controller_role_arn" {
   description = "ARN of the IAM role for the AWS Load Balancer Controller."

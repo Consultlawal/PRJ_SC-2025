@@ -55,6 +55,24 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
+      # -------------------------------------------------------------------
+      # CRITICAL FIX: Clean up the failed node group from the previous run.
+      # -------------------------------------------------------------------
+      - name: Clean up failed EKS Node Group from state
+        id: cleanup_state
+        working-directory: ./terraform
+        # This step checks for and removes the stuck node group resource from the state file.
+        run: |
+          echo "Checking for stuck 'aws_eks_node_group.demo' resource in state..."
+          
+          if terraform state list | grep "aws_eks_node_group.demo"; then
+            echo "Found stuck node group in state. Removing it."
+            terraform state rm aws_eks_node_group.demo
+            echo "Node group removed from state. Terraform will attempt a clean recreation."
+          else
+            echo "Node group is clean or successfully created. Skipping state removal."
+          fi
+          
       - name: Terraform Apply
         id: tf_apply
         working-directory: ./terraform
@@ -62,7 +80,7 @@ jobs:
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}
           TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
-
+          
       # =======================================================
       # 3. FETCH TERRAFORM OUTPUTS (Required for Helm/IRSA setup)
       # =======================================================
@@ -72,14 +90,14 @@ jobs:
         run: |
           ALB_ARN=$(terraform output -raw alb_controller_role_arn)
           DNS_ARN=$(terraform output -raw external_dns_role_arn)
-          AUTOSCALER_ARN=$(terraform output -raw autoscaler_iam_role_arn) # <--- NEW LINE
+          AUTOSCALER_ARN=$(terraform output -raw autoscaler_iam_role_arn)
           
           echo "ALB_CONTROLLER_ARN=$ALB_ARN" >> $GITHUB_ENV
           echo "EXTERNAL_DNS_ARN=$DNS_ARN" >> $GITHUB_ENV
           echo "CLUSTER_AUTOSCALER_ARN=$AUTOSCALER_ARN" >> $GITHUB_ENV
         
-        # NOTE: This step assumes you have added 'alb_controller_role_arn' and 
-        # 'external_dns_role_arn' outputs to your terraform/outputs.tf file.
+        # NOTE: This step assumes you have added 'alb_controller_role_arn', 'external_dns_role_arn', and
+        # 'autoscaler_iam_role_arn' outputs to your terraform/outputs.tf file.
 
       # =======================================================
       # 4. PREPARE KUBERNETES CONTEXT
@@ -135,6 +153,7 @@ jobs:
             --wait
           
           echo "Cluster Autoscaler installation complete."
+          
       # =======================================================
       # 6. DEPLOY SECURITY MESH COMPONENTS (Policy, Runtime, Audit, Monitoring)
       # =======================================================

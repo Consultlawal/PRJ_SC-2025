@@ -5,6 +5,22 @@
 #  * EKS Cluster
 #
 
+// Get the security group ID created for the EKS worker nodes by the node group
+data "aws_security_group" "node_group_sg" {
+  filter {
+    name   = "tag:kubernetes.io/cluster/${var.cluster_name}"
+    values = ["owned"]
+  }
+  filter {
+    name   = "tag:eks:cluster-name"
+    values = [var.cluster_name]
+  }
+  filter {
+    name   = "tag:eks:nodegroup"
+    values = ["demo"]
+  }
+}
+
 resource "aws_iam_role" "demo-cluster" {
   name = "terraform-eks-demo-cluster"
 
@@ -59,6 +75,18 @@ resource "aws_security_group_rule" "demo-cluster-ingress-workstation-https" {
   security_group_id = aws_security_group.demo-cluster.id
   to_port           = 443
   type              = "ingress"
+}
+
+// CRITICAL FIX: Allow the worker nodes (Node Group SG) to talk to the
+// EKS Control Plane (Cluster SG) on HTTPS (443).
+resource "aws_security_group_rule" "allow_node_to_cluster" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = data.aws_security_group.node_group_sg.id
+  security_group_id        = aws_security_group.demo-cluster.id
+  description              = "Allow worker nodes to talk to EKS control plane"
 }
 
 resource "aws_eks_cluster" "demo" {

@@ -40,6 +40,16 @@ data "aws_iam_policy_document" "external_dns_assume_role_sa" {
   }
 }
 
+resource "aws_iam_role" "external_dns" {
+  name               = "${var.cluster_name}-ExternalDNS-Role"
+  assume_role_policy = data.aws_iam_policy_document.external_dns_assume_role_sa.json
+
+  # CRITICAL: Wait for the EKS Cluster to exist and have its OIDC identity ready
+  depends_on = [
+    aws_eks_cluster.demo
+  ]
+}
+
 # 3. IAM Role for ExternalDNS Service Account
 resource "aws_iam_role" "external_dns" {
   # Variable used for naming

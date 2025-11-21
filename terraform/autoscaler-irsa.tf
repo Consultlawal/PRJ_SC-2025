@@ -37,3 +37,13 @@ output "autoscaler_iam_role_arn" {
   description = "The ARN of the IAM role for the Cluster Autoscaler."
   value       = aws_iam_role.cluster_autoscaler.arn // <-- FIXED NAME HERE
 }
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  name               = "${var.cluster_name}-ClusterAutoscaler-Role"
+  assume_role_policy = data.aws_iam_policy_document.autoscaler_assume.json
+
+  # CRITICAL: Wait for the EKS Cluster to exist and have its OIDC identity ready
+  depends_on = [
+    aws_eks_cluster.demo
+  ]
+}
