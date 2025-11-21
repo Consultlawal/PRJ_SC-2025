@@ -1,9 +1,6 @@
 # --- Common IRSA Setup (Required by ALL EKS Service Account Roles) ---
 
 # Fetch EKS cluster details to get the OIDC Issuer URL
-data "aws_eks_cluster" "demo" {
-  name = var.cluster_name
-}
 
 # Defines the trust policy that allows a Kubernetes Service Account (SA) 
 # to assume this role based on the EKS OIDC provider.
@@ -11,14 +8,14 @@ data "aws_iam_policy_document" "assume_role_sa" {
   statement {
     effect  = "Allow"
     principals {
-      identifiers = [data.aws_eks_cluster.demo.identity[0].oidc[0].issuer]
+      identifiers = [aws_eks_cluster.demo.identity[0].oidc[0].issuer]
       type        = "Federated"
     }
     actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
       test     = "StringEquals"
       # The Service Account name for the ALB Controller will be 'aws-load-balancer-controller'
-      variable = "${replace(data.aws_eks_cluster.demo.identity[0].oidc[0].issuer, "https://", "")}:sub"
+      variable = "${replace(aws_eks_cluster.demo.identity[0].oidc[0].issuer, "https://", "")}:sub"
       values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
     }
   }

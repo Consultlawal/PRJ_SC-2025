@@ -34,7 +34,7 @@ data "aws_iam_policy_document" "external_dns_assume_role_sa" {
     condition {
       test     = "StringEquals"
       # The Service Account name for ExternalDNS will be 'external-dns'
-      variable = "${replace(data.aws_eks_cluster.demo.identity[0].oidc[0].issuer, "https://", "")}:sub"
+      variable = "${replace(aws_eks_cluster.demo.identity[0].oidc[0].issuer, "https://", "")}:sub"
       values   = ["system:serviceaccount:external-dns:external-dns"]
     }
   }
