@@ -7,14 +7,14 @@ data "aws_iam_policy_document" "autoscaler_assume" {
     effect  = "Allow"
     principals {
       // Reference the OIDC issuer from the EKS cluster data
-      identifiers = [data.aws_eks_cluster.demo.identity[0].oidc[0].issuer]
+      identifiers = [aws_eks_cluster.demo.identity[0].oidc[0].issuer]
       type        = "Federated"
     }
     actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
       test     = "StringEquals"
       // Service Account name for the Cluster Autoscaler (namespace:kube-system, name:cluster-autoscaler)
-      variable = "${replace(data.aws_eks_cluster.demo.identity[0].oidc[0].issuer, "https://", "")}:sub"
+      variable = "${replace(aws_eks_cluster.demo.identity[0].oidc[0].issuer, "https://", "")}:sub"
       values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
     }
   }

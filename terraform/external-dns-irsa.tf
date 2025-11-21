@@ -27,7 +27,7 @@ data "aws_iam_policy_document" "external_dns_assume_role_sa" {
     effect  = "Allow"
     principals {
       # References the OIDC issuer fetched from the EKS cluster in the previous file
-      identifiers = [data.aws_eks_cluster.demo.identity[0].oidc[0].issuer]
+      identifiers = [aws_eks_cluster.demo.identity[0].oidc[0].issuer]
       type        = "Federated"
     }
     actions = ["sts:AssumeRoleWithWebIdentity"]
