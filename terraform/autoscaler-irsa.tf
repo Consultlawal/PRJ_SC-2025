@@ -1,9 +1,5 @@
 // In terraform/autoscaler-irsa.tf
 
-// Fetch EKS cluster details (OIDC issuer is inside)
-data "aws_eks_cluster" "demo" {
-  name = var.cluster_name
-}
 
 // 1. Policy Document for the Cluster Autoscaler Service Account (SA)
 data "aws_iam_policy_document" "autoscaler_assume" {
