@@ -95,11 +95,11 @@ resource "aws_eks_cluster" "demo" {
 }
 
 # NEW: Data source to explicitly reference the OIDC provider created by EKS
-data "aws_iam_openid_connect_provider" "eks_oidc_provider" {
-  url = aws_eks_cluster.demo.identity[0].oidc[0].issuer
+# data "aws_iam_openid_connect_provider" "eks_oidc_provider" {
+#   url = aws_eks_cluster.demo.identity[0].oidc[0].issuer
   
-  # Ensure the data source lookup waits for the cluster resource to be available
-  depends_on = [
-    aws_eks_cluster.demo
-  ]
-}
+#   # Ensure the data source lookup waits for the cluster resource to be available
+#   depends_on = [
+#     aws_eks_cluster.demo
+#   ]
+# }

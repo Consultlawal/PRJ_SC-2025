@@ -49,7 +49,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
   # CRITICAL: Wait for the EKS Cluster to exist and have its OIDC identity ready
   depends_on = [
     aws_eks_cluster.demo,
-    data.aws_iam_openid_connect_provider.eks_oidc_provider
+    # data.aws_iam_openid_connect_provider.eks_oidc_provider
   ]
 }
 

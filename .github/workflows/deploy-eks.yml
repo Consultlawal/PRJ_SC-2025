@@ -55,16 +55,12 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
-      # -------------------------------------------------------------------
-      # CRITICAL FIX: Clean up the failed node group from the previous run.
-      # -------------------------------------------------------------------
       - name: Clean up failed EKS Node Group from state
         id: cleanup_state
         working-directory: ./terraform
         # This step checks for and removes the stuck node group resource from the state file.
         run: |
           echo "Checking for stuck 'aws_eks_node_group.demo' resource in state..."
-          
           if terraform state list | grep "aws_eks_node_group.demo"; then
             echo "Found stuck node group in state. Removing it."
             terraform state rm aws_eks_node_group.demo
@@ -72,9 +68,34 @@ jobs:
           else
             echo "Node group is clean or successfully created. Skipping state removal."
           fi
+
+      # -------------------------------------------------------------------
+      # 2.1. FIRST APPLY: Provision the Cluster and Node Group
+      # We target only these resources to force the OIDC provider creation first.
+      # -------------------------------------------------------------------
+      - name: Terraform Apply (Cluster and Node Group)
+        id: tf_apply_cluster
+        working-directory: ./terraform
+        run: terraform apply -auto-approve -target=aws_eks_cluster.demo -target=aws_eks_node_group.demo
+        env:
+          TF_VAR_region: ${{ env.AWS_REGION }}
+          TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
           
-      - name: Terraform Apply
-        id: tf_apply
+      # -------------------------------------------------------------------
+      # 2.2. MANDATORY WAIT: CRITICAL FIX for OIDC MalformedPolicyDocument
+      # This delay allows the EKS-created OIDC provider to fully register in IAM.
+      # -------------------------------------------------------------------
+      - name: Wait for EKS OIDC Provider to Propagate
+        run: |
+          echo "Waiting 120 seconds for EKS OIDC Provider to register in IAM..."
+          sleep 120
+          
+      # -------------------------------------------------------------------
+      # 2.3. SECOND APPLY: Apply Remaining Resources (IRSA Roles, etc.)
+      # Running a full apply now will create the IRSA roles successfully.
+      # -------------------------------------------------------------------
+      - name: Terraform Apply (IRSA and Remaining Resources)
+        id: tf_apply_irsa_and_rest
         working-directory: ./terraform
         run: terraform apply -auto-approve
         env:
