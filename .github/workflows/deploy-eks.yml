@@ -76,7 +76,7 @@ jobs:
       - name: Terraform Apply (Cluster and Node Group)
         id: tf_apply_cluster
         working-directory: ./terraform
-        run: terraform apply -auto-approve -target=aws_eks_cluster.demo -target=aws_eks_node_group.demo
+        run: terraform apply -auto-approve
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}
           TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
