@@ -344,9 +344,14 @@ jobs:
         if: always() 
         working-directory: ./terraform
         run: |
-          istioctl uninstall -y || true
+          # Uninstall Istio cleanly
+          # Note: If Istio was not installed (due to previous failures), this might still error
+          # but the `|| true` will prevent the step from failing the entire job.
+          istioctl uninstall --purge -y || true # Added --purge
+          
           # NOTE: Uncomment the line below to enable auto-destruction of your AWS resources.
           # terraform destroy -auto-approve
+          
           terraform plan -destroy
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}

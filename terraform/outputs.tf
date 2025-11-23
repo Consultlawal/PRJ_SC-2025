@@ -70,3 +70,28 @@ output "eks_oidc_provider_arn" {
   description = "The ARN of the EKS cluster's OIDC Identity provider."
   value       = aws_iam_openid_connect_provider.demo.arn
 }
+
+# terraform/outputs.tf
+
+output "eks_oidc_issuer_url" {
+  description = "The URL of the EKS cluster's OIDC Identity provider."
+  value       = aws_eks_cluster.demo.identity[0].oidc[0].issuer
+}
+
+output "eks_oidc_provider_arn" {
+  description = "The ARN of the EKS cluster's OIDC Identity provider."
+  value       = aws_iam_openid_connect_provider.demo.arn # This is now valid!
+}
+
+# Also ensure you have outputs for the IRSA role ARNs as your workflow relies on them:
+output "alb_controller_role_arn" {
+  value = aws_iam_role.alb_controller.arn
+}
+
+output "external_dns_role_arn" {
+  value = aws_iam_role.external_dns.arn
+}
+
+output "autoscaler_iam_role_arn" {
+  value = aws_iam_role.cluster_autoscaler.arn
+}
