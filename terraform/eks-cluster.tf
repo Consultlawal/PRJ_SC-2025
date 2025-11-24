@@ -96,16 +96,16 @@ resource "aws_eks_cluster" "demo" {
 
 # Add this to one of your .tf files in the terraform directory, e.g., eks-cluster.tf
 # This resource links the EKS cluster's OIDC issuer to IAM
-# resource "aws_iam_openid_connect_provider" "demo" {
-#   client_id_list = ["sts.amazonaws.com"]
-#   thumbprint_list = [data.tls_certificate.oidc.certificates[0].sha1_fingerprint]
-#   url            = aws_eks_cluster.demo.identity[0].oidc[0].issuer
-# }
+resource "aws_iam_openid_connect_provider" "demo" {
+  client_id_list = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.oidc.certificates[0].sha1_fingerprint]
+  url            = aws_eks_cluster.demo.identity[0].oidc[0].issuer
+}
 
-# # This data source is required to get the OIDC provider's thumbprint
-# data "tls_certificate" "oidc" {
-#   url = aws_eks_cluster.demo.identity[0].oidc[0].issuer
-# }
+# This data source is required to get the OIDC provider's thumbprint
+data "tls_certificate" "oidc" {
+  url = aws_eks_cluster.demo.identity[0].oidc[0].issuer
+}
 
 # NEW: Data source to explicitly reference the OIDC provider created by EKS
 # data "aws_iam_openid_connect_provider" "eks_oidc_provider" {
