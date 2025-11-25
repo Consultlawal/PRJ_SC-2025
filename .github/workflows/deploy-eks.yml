@@ -76,28 +76,28 @@ jobs:
             echo "Node group is clean or successfully created. Skipping state removal."
           fi
 
-      # --- START OF ADDED TEMPORARY STEP ---
-      - name: Import existing EKS Cluster IAM Role
-        id: import_eks_cluster_role
-        working-directory: ./terraform
-        run: |
-          # This step checks if the aws_iam_role.demo-cluster resource is already in the Terraform state.
-          # If not, it attempts to import the existing AWS IAM role into the state.
-          # This is used to reconcile Terraform state with existing resources in AWS,
-          # especially after an "EntityAlreadyExists" error for this specific role.
-          if ! terraform state list | grep "aws_iam_role.demo-cluster"; then
-            echo "aws_iam_role.demo-cluster not found in state. Attempting to import..."
-            # IMPORTANT: Ensure the ARN below matches the actual ARN of the role in your AWS account.
-            # Replace '009593259890' with your actual AWS Account ID if different.
-            # terraform import aws_iam_role.demo-cluster arn:aws:iam::009593259890:role/terraform-eks-demo-cluster
-            # echo "aws_iam_role.demo-cluster imported successfully."
-          else
-            echo "aws_iam_role.demo-cluster already in state. No import needed."
-          fi
-        env:
-          TF_VAR_region: ${{ env.AWS_REGION }}
-          TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
-      # --- END OF ADDED TEMPORARY STEP ---
+      # # --- START OF ADDED TEMPORARY STEP ---
+      # - name: Import existing EKS Cluster IAM Role
+      #   id: import_eks_cluster_role
+      #   working-directory: ./terraform
+      #   run: |
+      #     # This step checks if the aws_iam_role.demo-cluster resource is already in the Terraform state.
+      #     # If not, it attempts to import the existing AWS IAM role into the state.
+      #     # This is used to reconcile Terraform state with existing resources in AWS,
+      #     # especially after an "EntityAlreadyExists" error for this specific role.
+      #     if ! terraform state list | grep "aws_iam_role.demo-cluster"; then
+      #       echo "aws_iam_role.demo-cluster not found in state. Attempting to import..."
+      #       # IMPORTANT: Ensure the ARN below matches the actual ARN of the role in your AWS account.
+      #       # Replace '009593259890' with your actual AWS Account ID if different.
+      #       # terraform import aws_iam_role.demo-cluster arn:aws:iam::009593259890:role/terraform-eks-demo-cluster
+      #       # echo "aws_iam_role.demo-cluster imported successfully."
+      #     else
+      #       echo "aws_iam_role.demo-cluster already in state. No import needed."
+      #     fi
+      #   env:
+      #     TF_VAR_region: ${{ env.AWS_REGION }}
+      #     TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
+      # # --- END OF ADDED TEMPORARY STEP ---
 
       # -------------------------------------------------------------------
       # 2.1. FIRST APPLY: Provision the Cluster and OIDC Provider (OIDC Fix)
