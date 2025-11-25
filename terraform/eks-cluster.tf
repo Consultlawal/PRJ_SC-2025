@@ -340,7 +340,7 @@
 # }
 
 
-resource "aws_iam_role" "demo_cluster" {
+resource "aws_iam_role" "demo-cluster" {
   name = "terraform-eks-demo-cluster"
 
   assume_role_policy = <<EOF
