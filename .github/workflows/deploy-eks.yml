@@ -89,8 +89,8 @@ jobs:
             echo "aws_iam_role.demo-cluster not found in state. Attempting to import..."
             # IMPORTANT: Ensure the ARN below matches the actual ARN of the role in your AWS account.
             # Replace '009593259890' with your actual AWS Account ID if different.
-            terraform import aws_iam_role.demo-cluster arn:aws:iam::009593259890:role/terraform-eks-demo-cluster
-            echo "aws_iam_role.demo-cluster imported successfully."
+            # terraform import aws_iam_role.demo-cluster arn:aws:iam::009593259890:role/terraform-eks-demo-cluster
+            # echo "aws_iam_role.demo-cluster imported successfully."
           else
             echo "aws_iam_role.demo-cluster already in state. No import needed."
           fi
